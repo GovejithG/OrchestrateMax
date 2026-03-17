@@ -1,5 +1,8 @@
 import asyncio
+import logging
 from typing import Dict, Tuple
+
+logger = logging.getLogger("orchestratemax.executor")
 
 from application.agent.agent_controller import (
     AgentController,
@@ -18,6 +21,9 @@ from infrastructure.repositories.sqlalchemy_execution_event_repository import (
 from infrastructure.repositories.execution_repository import (
     ExecutionRepository,
 )
+from infrastructure.repositories.sqlalchemy_task_repository import (
+    SQLAlchemyTaskRepository,
+)
 
 from infrastructure.database.session import AsyncSessionLocal
 
@@ -30,17 +36,19 @@ class TaskExecutor:
 
     def __init__(
         self,
+        llm,
         timeout_seconds: int = 60,
         max_workers: int = 3,
         max_retries: int = 2,
     ):
+        self._llm = llm
         self._running_executions: Dict[str, asyncio.Task] = {}
         self._timeout_seconds = timeout_seconds
         self._max_workers = max_workers
         self._max_retries = max_retries
 
         self._queue: asyncio.Queue[
-            Tuple[AgentController, str, str, str]
+            Tuple[str, str, str, str]
         ] = asyncio.Queue()
 
         for _ in range(self._max_workers):
@@ -51,8 +59,8 @@ class TaskExecutor:
     # -------------------------
     def enqueue_execution(
         self,
-        controller: AgentController,
         session_id: str,
+        task_id: str,
         execution_id: str,
         user_input: str,
     ) -> None:
@@ -61,7 +69,7 @@ class TaskExecutor:
             raise RuntimeError("Execution is already running.")
 
         self._queue.put_nowait(
-            (controller, session_id, execution_id, user_input)
+            (session_id, task_id, execution_id, user_input)
         )
 
     # -------------------------
@@ -70,10 +78,10 @@ class TaskExecutor:
     async def _worker_loop(self):
 
         while True:
-            controller, session_id, execution_id, user_input = await self._queue.get()
+            session_id, task_id, execution_id, user_input = await self._queue.get()
 
             task = asyncio.create_task(
-                self._execute(controller, session_id, execution_id, user_input)
+                self._execute(session_id, task_id, execution_id, user_input)
             )
 
             self._running_executions[execution_id] = task
@@ -82,7 +90,7 @@ class TaskExecutor:
                 await task
             except Exception as e:
                 # Prevent background task crashes
-                print(f"Worker loop error: {e}")
+                logger.error(f"Worker loop error for execution {execution_id}: {e}", exc_info=True)
             finally:
                 self._running_executions.pop(execution_id, None)
                 self._queue.task_done()
@@ -92,29 +100,53 @@ class TaskExecutor:
     # -------------------------
     async def _execute(
         self,
-        controller: AgentController,
         session_id: str,
+        task_id: str,
         execution_id: str,
         user_input: str,
     ) -> None:
 
-        try:
-            await asyncio.wait_for(
-                controller.run(
-                    session_id=session_id,
-                    execution_id=execution_id,
-                    user_input=user_input,
-                ),
-                timeout=self._timeout_seconds,
+        async with AsyncSessionLocal() as db:
+
+            # 1) Create and save execution record
+            execution_repo = ExecutionRepository(db)
+
+            execution = Execution.create(
+                task_id=task_id,
+                attempt_number=1,
             )
+            # Override the auto-generated id with the one provided by the endpoint
+            execution.id = execution_id
 
-        except asyncio.TimeoutError:
-            cancellation_registry.cancel(execution_id)
+            await execution_repo.save(execution)
 
-            async with AsyncSessionLocal() as db:
+            # 2) Mark running and persist
+            execution.mark_running()
+            await execution_repo.update(execution)
+
+            logger.info(f"Execution {execution_id} started (attempt {execution.attempt_number})")
+
+            # 3) Construct repos and controller inside this session
+            task_repo = SQLAlchemyTaskRepository(db)
+            controller = AgentController(self._llm, task_repo)
+
+            # 4) Run with timeout — session stays alive for the entire duration
+            try:
+                await asyncio.wait_for(
+                    controller.run(
+                        session_id=session_id,
+                        execution_id=execution_id,
+                        user_input=user_input,
+                    ),
+                    timeout=self._timeout_seconds,
+                )
+                logger.info(f"Execution {execution_id} completed successfully")
+
+            except asyncio.TimeoutError:
+                logger.error(f"Execution {execution_id} failed: timeout of {self._timeout_seconds}s exceeded")
+                cancellation_registry.cancel(execution_id)
 
                 event_repo = SQLAlchemyExecutionEventRepository(db)
-                execution_repo = ExecutionRepository(db)
 
                 # Persist timeout event
                 await event_repo.add(
@@ -127,6 +159,7 @@ class TaskExecutor:
                     )
                 )
 
+                # Re-fetch execution to get latest state
                 execution = await execution_repo.get_by_id(execution_id)
 
                 if execution and execution.status == "running":
@@ -134,24 +167,24 @@ class TaskExecutor:
                     await execution_repo.update(execution)
 
                     await self._maybe_retry(
-                        controller,
                         session_id,
+                        task_id,
                         execution,
                         user_input,
                         execution_repo,
                         event_repo,
                     )
 
-        except Exception as e:
-            print(f"Worker execution error: {e}")
+            except Exception as e:
+                logger.error(f"Execution {execution_id} failed: {e}", exc_info=True)
 
     # -------------------------
     # Retry Logic
     # -------------------------
     async def _maybe_retry(
         self,
-        controller: AgentController,
         session_id: str,
+        task_id: str,
         execution,
         user_input: str,
         execution_repo: ExecutionRepository,
@@ -162,7 +195,7 @@ class TaskExecutor:
             return
 
         new_execution = Execution.create(
-            task_id=execution.task_id,
+            task_id=task_id,
             attempt_number=execution.attempt_number + 1,
         )
 
@@ -179,9 +212,9 @@ class TaskExecutor:
             )
         )
 
-        # Requeue new execution
+        # Requeue new execution (controller will be reconstructed in _execute)
         self._queue.put_nowait(
-            (controller, session_id, new_execution.id, user_input)
+            (session_id, task_id, new_execution.id, user_input)
         )
 
     # -------------------------

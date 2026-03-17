@@ -3,6 +3,7 @@
 import json
 from typing import List
 
+from application.events.event_bus import event_bus
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -27,6 +28,14 @@ class SQLAlchemyExecutionEventRepository(ExecutionEventRepository):
 
         self.db.add(model)
         await self.db.commit()
+
+        await event_bus.publish(event.execution_id, {
+            "id": event.id,
+            "execution_id": event.execution_id,
+            "event_type": event.event_type.value if hasattr(event.event_type, "value") else event.event_type,
+            "payload": event.payload,
+            "created_at": event.created_at.isoformat(),
+        })
 
     async def get_by_execution_id(self, execution_id: str) -> List[ExecutionEvent]:
         result = await self.db.execute(

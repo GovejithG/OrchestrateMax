@@ -16,3 +16,9 @@ class SessionService:
 
     async def get_session(self, session_id: str) -> Session | None:
         return await self.repository.get_by_id(session_id)
+
+    async def list_sessions(self) -> list[Session]:
+        return await self.repository.list_all()
+
+    async def delete_session(self, session_id: str) -> None:
+        await self.repository.delete(session_id)

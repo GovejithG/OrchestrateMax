@@ -4,15 +4,42 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
+*.egg-info/
+.pytest_cache/
+dist/
 
-# SQLite
+# Environment
+.env
+.env.local
+
+# Database
 *.db
+*.db-shm
+*.db-wal
+
+# Alembic — keep the folder but ignore any auto-generated offline scripts
+alembic/versions/*.pyc
+
+# Agent workspace — files written by the executor agent
+workspace/
 
 # Node
 ui/node_modules/
 ui/dist/
+ui/.env
+ui/.env.local
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm / JetBrains
+.idea/
+
+# Logs
+*.log

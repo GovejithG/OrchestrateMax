@@ -34,3 +34,19 @@ class SQLAlchemySessionRepository(SessionRepository):
             name=model.name,  # ← THIS WAS MISSING
             created_at=model.created_at,
         )
+
+    async def list_all(self) -> list[Session]:
+        result = await self.db.execute(
+            select(SessionModel).order_by(SessionModel.created_at.desc())
+        )
+        models = result.scalars().all()
+        return [Session(id=m.id, name=m.name, created_at=m.created_at) for m in models]
+
+    async def delete(self, session_id: str) -> None:
+        result = await self.db.execute(
+            select(SessionModel).where(SessionModel.id == session_id)
+        )
+        model = result.scalar_one_or_none()
+        if model:
+            await self.db.delete(model)
+            await self.db.commit()

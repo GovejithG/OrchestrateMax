@@ -80,3 +80,26 @@ class ExecutionRepository:
             )
             for m in models
         ]
+
+    async def get_latest_by_task_id(self, task_id: str) -> Optional[Execution]:
+        result = await self.session.execute(
+            select(ExecutionModel)
+            .where(ExecutionModel.task_id == task_id)
+            .order_by(ExecutionModel.started_at.desc())
+            .limit(1)
+        )
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Execution(
+            id=model.id,
+            task_id=model.task_id,
+            status=ExecutionStatus(model.status),
+            started_at=model.started_at,
+            finished_at=model.finished_at,
+            final_output=model.final_output,
+            error_message=model.error_message,
+            attempt_number=model.attempt_number,
+        )

@@ -15,13 +15,8 @@ class TaskModel(Base):
     status = Column(String, nullable=False)
 
     # -------------------------
-    # Execution Persistence (Legacy - will be migrated later)
+    # Execution Persistence (Legacy - migrated)
     # -------------------------
-    final_output = Column(Text, nullable=True)
-    error_message = Column(Text, nullable=True)
-
-    execution_started_at = Column(DateTime, nullable=True)
-    execution_finished_at = Column(DateTime, nullable=True)
 
     # -------------------------
     # Timestamps

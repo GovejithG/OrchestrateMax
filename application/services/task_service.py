@@ -26,3 +26,5 @@ class TaskService:
     async def get_task(self, task_id: str) -> Task | None:
         return await self.repository.get_by_id(task_id)
         
+    async def get_tasks_by_session(self, session_id: str) -> list[Task]:
+        return await self.repository.get_by_session_id(session_id)

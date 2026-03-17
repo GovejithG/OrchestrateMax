@@ -30,12 +30,6 @@ class SQLAlchemyTaskRepository(TaskRepository):
             existing.description = task.description
             existing.status = task.status
 
-            # Execution persistence fields
-            existing.final_output = task.final_output
-            existing.error_message = task.error_message
-            existing.execution_started_at = task.execution_started_at
-            existing.execution_finished_at = task.execution_finished_at
-
             # Timestamps
             existing.created_at = task.created_at
             existing.updated_at = task.updated_at
@@ -47,12 +41,6 @@ class SQLAlchemyTaskRepository(TaskRepository):
                 title=task.title,
                 description=task.description,
                 status=task.status,
-
-                # Execution persistence fields
-                final_output=task.final_output,
-                error_message=task.error_message,
-                execution_started_at=task.execution_started_at,
-                execution_finished_at=task.execution_finished_at,
 
                 created_at=task.created_at,
                 updated_at=task.updated_at,
@@ -78,11 +66,6 @@ class SQLAlchemyTaskRepository(TaskRepository):
             status=model.status,
             created_at=model.created_at,
             updated_at=model.updated_at,
-
-            final_output=model.final_output,
-            error_message=model.error_message,
-            execution_started_at=model.execution_started_at,
-            execution_finished_at=model.execution_finished_at,
         )
 
     async def get_by_session_id(self, session_id: str) -> list[Task]:
@@ -103,11 +86,6 @@ class SQLAlchemyTaskRepository(TaskRepository):
                     status=model.status,
                     created_at=model.created_at,
                     updated_at=model.updated_at,
-
-                    final_output=model.final_output,
-                    error_message=model.error_message,
-                    execution_started_at=model.execution_started_at,
-                    execution_finished_at=model.execution_finished_at,
                 )
             )
 

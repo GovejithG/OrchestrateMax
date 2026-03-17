@@ -1,14 +1,15 @@
 import httpx
 from typing import List, Dict, Any
 from application.llm.base_llm import BaseLLM
+from config import settings
 
 
 class OllamaClient(BaseLLM):
 
     def __init__(
         self,
-        model: str = "qwen2.5:7b-instruct",
-        base_url: str = "http://localhost:11434",
+        model: str = settings.OLLAMA_MODEL,
+        base_url: str = settings.OLLAMA_BASE_URL,
     ):
         self.model = model
         self.base_url = base_url
@@ -33,7 +34,7 @@ class OllamaClient(BaseLLM):
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=60.0,
+                timeout=float(settings.OLLAMA_TIMEOUT),
             )
 
         response.raise_for_status()

@@ -1,0 +1,4 @@
+# Development — run these manually in separate terminals:
+# Terminal 1 (backend):  uvicorn app.main:app --reload
+# Terminal 2 (frontend): cd ui && npm run dev
+# Terminal 3 (ollama):   ollama serve

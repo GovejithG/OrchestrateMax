@@ -132,10 +132,10 @@ class AgentRuntime:
             await self.execution_event_repository.add(
                 ExecutionEvent.create(
                     execution_id=execution_id,
-                    event_type=ExecutionEventType.FINAL_OUTPUT,
+                    event_type=ExecutionEventType.AGENT_OUTPUT,
                     payload={
                         "iteration": iteration,
-                        "final_output": final_output,
+                        "agent_output": final_output,
                     },
                 )
             )

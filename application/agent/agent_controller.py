@@ -7,6 +7,7 @@ from application.agent.runtime import AgentRuntime
 from application.agent.multi_agent_orchestrator import MultiAgentOrchestrator
 from application.agent.cancellation_token import CancellationToken
 from application.agent.cancellation_registry import CancellationRegistry
+from config import settings
 
 from domain.repositories.task_repository import TaskRepository
 from domain.entities.artifact import Artifact, ArtifactType
@@ -36,7 +37,9 @@ class AgentController:
         self.llm = llm
         self.task_repository = task_repository
         self.tool_registry = ToolRegistry()
-        self.max_iterations = 6
+        self.planner_max_iterations = settings.PLANNER_MAX_ITERATIONS
+        self.executor_max_iterations = settings.EXECUTOR_MAX_ITERATIONS
+        self.reviewer_max_iterations = settings.REVIEWER_MAX_ITERATIONS
         self._multi_agent_enabled = True
 
     async def run(
@@ -105,7 +108,7 @@ class AgentController:
             tool_registry=self.tool_registry,
             execution_event_repository=execution_event_repository,
             cancellation_token=token,
-            max_iterations=self.max_iterations,
+            max_iterations=self.planner_max_iterations,
         )
 
         executor_runtime = AgentRuntime(
@@ -113,7 +116,7 @@ class AgentController:
             tool_registry=self.tool_registry,
             execution_event_repository=execution_event_repository,
             cancellation_token=token,
-            max_iterations=self.max_iterations,
+            max_iterations=self.executor_max_iterations,
         )
 
         reviewer_runtime = AgentRuntime(
@@ -121,7 +124,7 @@ class AgentController:
             tool_registry=self.tool_registry,
             execution_event_repository=execution_event_repository,
             cancellation_token=token,
-            max_iterations=self.max_iterations,
+            max_iterations=self.reviewer_max_iterations,
         )
 
         # -------------------------
